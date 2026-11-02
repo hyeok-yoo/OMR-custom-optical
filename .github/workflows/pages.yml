@@ -22,6 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Firebase 설정 파일 생성 (시크릿이 있을 때만 이용 기록 켜짐)
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_OWNER_UID: ${{ secrets.FIREBASE_OWNER_UID }}
+        run: |
+          if [ -n "$FIREBASE_PROJECT_ID" ] && [ -n "$FIREBASE_OWNER_UID" ]; then
+            node -e 'const e=process.env;process.stdout.write("export default "+JSON.stringify({apiKey:e.FIREBASE_API_KEY,authDomain:e.FIREBASE_AUTH_DOMAIN,projectId:e.FIREBASE_PROJECT_ID,appId:e.FIREBASE_APP_ID,ownerUid:e.FIREBASE_OWNER_UID})+";\n")' > js/firebase-config.js
+            echo "Firebase 설정 포함"
+          else
+            echo "Firebase 시크릿 없음 → 이용 기록 끔"
+          fi
       - name: 배포할 파일만 모으기
         run: |
           mkdir _site

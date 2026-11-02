@@ -1,14 +1,22 @@
 /* OMR 채점 — 앱 셸, 판독 흐름, 결과 화면, 설정 */
 (function (root) {
   'use strict';
-  const VERSION = '2.0.0';
+  const VERSION = '2.1.0';
   const { $, $$, toast, haptic, Sheet, choose, confirmSheet, esc, fmtDate, CIRCLED, countUp } = root.UI;
   const { Settings, Keys, Layouts, History, Sessions, uid } = root.Store;
   const E = root.OMREngine, G = root.Grading;
   const MAX_DIM = 3000;
+  // 제품 구분: 'personal'(개인용, 내 답안지만) / 'academy'(학원용, 반 전체 연속 채점·성명 판독)
+  // 학원용은 나중에 따로 출시할 예정이라 기능은 남겨 두고 화면에서만 숨긴다.
+  const EDITION = root.OMR_EDITION || 'personal';
+  const PERSONAL = EDITION === 'personal';
+  document.documentElement.dataset.edition = EDITION;
+  const myName = () => (root.OMRT && root.OMRT.getName && root.OMRT.getName()) || '';
 
   root.AppSettings = () => Settings.get();
   root.AppSettings.set = p => Settings.set(p);
+  // 이용 기록(telemetry.js, 모듈이라 늦게 로드됨)이 준비되기 전의 이벤트는 큐에 모아 둔다
+  root.OMRT = root.OMRT || { q: [], track(ev) { this.q.push(ev); }, enabled: false };
 
   const S = {
     view: 'scan', stack: [],
@@ -30,7 +38,7 @@
 
   // ================================================================ 화면 전환
   const TABS = ['scan', 'keys', 'history', 'settings'];
-  const BACK_LABEL = { scan: '채점', keys: '정답', history: '기록', settings: '설정', result: '결과' };
+  const BACK_LABEL = { scan: '채점', keys: '정답', history: '기록', settings: '설정', result: '결과', admin: '관리자' };
   function go(view, push) {
     if (TABS.includes(view) && !push) S.stack = [];
     else if (push) S.stack.push(S.view);
@@ -73,7 +81,12 @@
     if (S.stack.length) { back(); syncHistory(); }
   });
   $('#backBtn').addEventListener('click', () => back());
-  $('#tabbar').addEventListener('click', e => { const b = e.target.closest('button'); if (b) go(b.dataset.tab, false); });
+  $('#tabbar').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    // 넓은 화면에서는 하위 화면에서도 사이드바가 보이므로 저장 안 한 편집을 지킨다
+    if (S.view === 'keyedit' && root.KeyEditor && root.KeyEditor.dirty() && !confirm('저장하지 않은 변경 사항이 있습니다. 나갈까요?')) return;
+    go(b.dataset.tab, false);
+  });
   window.addEventListener('scroll', () => {
     const y = window.scrollY;
     $('#nav').classList.toggle('scrolled', y > 2);
@@ -149,13 +162,15 @@
     History.all().then(list => {
       const recent = list.filter(r => !r.sessionId).slice(0, 5);
       $('#recentTitle').classList.toggle('hidden', !recent.length);
+      $('#scanGuide').classList.toggle('hidden', !!recent.length);
       $('#recentList').innerHTML = recent.map(historyRow).join('');
     }).catch(() => {});
   }
   function historyRow(r) {
     const big = r.summary && r.summary.hasKey ? (r.summary.hasPoints ? `${r.summary.total}<small>점</small>` : `${r.summary.right}<small>/${r.summary.graded}</small>`) : `<small>정답 없음</small>`;
-    const title = r.name || r.keyName || r.profileLabel || '답안지';
-    const sub = [fmtDate(r.date), r.name && r.keyName ? r.keyName : r.profileLabel].filter(Boolean).join(' · ');
+    const title = PERSONAL ? (r.keyName || r.profileLabel || '답안지') : (r.name || r.keyName || r.profileLabel || '답안지');
+    const sub = PERSONAL ? [fmtDate(r.date), r.keyName ? r.profileLabel : ''].filter(Boolean).join(' · ')
+      : [fmtDate(r.date), r.name && r.keyName ? r.keyName : r.profileLabel].filter(Boolean).join(' · ');
     return `<button class="row row-tap" data-hist="${esc(r.id)}"><span class="row-main"><span class="t">${esc(title)}</span><span class="row-sub">${esc(sub)}</span></span><span class="big-num">${big}</span><svg class="chev"><use href="#i-chev"/></svg></button>`;
   }
   $('#recentList').addEventListener('click', e => { const b = e.target.closest('[data-hist]'); if (b) openHistory(b.dataset.hist); });
@@ -312,6 +327,7 @@
       ai: 'idle'
     };
     S.cur = rec;
+    root.OMRT.track(r.ai ? 'ai' : 'scan');
     if (!o.silent) {
       S.stack = ['scan'];
       go('result', false); S.stack = ['scan'];
@@ -353,8 +369,12 @@
     rec.graded = g;
     // 이름·수험번호
     const who = [];
-    if (r.name && r.name.text) who.push(`<span class="name">${esc(r.name.text)}</span>`);
-    if (r.examNo && r.examNo.text) who.push(`<span class="meta num">${esc(r.examNo.text)}</span>`);
+    // 개인용은 답안지 성명 칸을 읽지 않는다 — 본인 답안지로 본다
+    if (PERSONAL) who.push(`<span class="name">${esc(myName() || '내 답안지')}</span>`);
+    else {
+      if (r.name && r.name.text) who.push(`<span class="name">${esc(r.name.text)}</span>`);
+      if (r.examNo && r.examNo.text) who.push(`<span class="meta num">${esc(r.examNo.text)}</span>`);
+    }
     const k0 = rec.keyIds[0] ? Keys.get(rec.keyIds[0]) : null;
     who.push(`<span class="meta">${esc(k0 ? k0.name || '정답' : (r.profile.subject || r.profile.label))}</span>`);
     if (r.ai) who.push('<span class="tag">AI 판독</span>');
@@ -564,7 +584,7 @@
       }
     });
     const info = '#2c66d4';
-    if (r.name) r.name.cols.forEach(c => { if (c.pick >= 0) ring(c.cells[c.pick], info, false, 2.5); });
+    if (r.name && !PERSONAL) r.name.cols.forEach(c => { if (c.pick >= 0) ring(c.cells[c.pick], info, false, 2.5); });
     if (r.examNo) r.examNo.digits.forEach(d => { const i = d.cells.findIndex(x => x.digit === d.digit); if (d.digit != null && i >= 0) ring(d.cells[i], info, false, 2.5); });
     if (r.elective) (r.elective.marked || []).forEach(m => ring(r.elective.cells[m - 1], info, false, 3));
     (r.stray || []).forEach(p => { ctx.setLineDash([]); ctx.strokeStyle = '#e03b3b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(p.x - 12, p.y - 12); ctx.lineTo(p.x + 12, p.y + 12); ctx.moveTo(p.x + 12, p.y - 12); ctx.lineTo(p.x - 12, p.y + 12); ctx.stroke(); });
@@ -589,7 +609,7 @@
     const k0 = rec.keyIds[0] ? Keys.get(rec.keyIds[0]) : null;
     const data = {
       id: rec.id, date: rec.date, sessionId: rec.sessionId,
-      name: rec.res.name ? rec.res.name.text : '', examNo: rec.res.examNo ? rec.res.examNo.text : '',
+      name: !PERSONAL && rec.res.name ? rec.res.name.text : '', examNo: !PERSONAL && rec.res.examNo ? rec.res.examNo.text : '',
       keyName: k0 ? k0.name : '', profileLabel: rec.res.profile.subject || rec.res.profile.label,
       fingerprint: rec.res.fingerprint,
       keyIds: rec.keyIds, keySnaps: rec.keySnaps, electiveIdx: rec.electiveIdx, electiveDetected: rec.electiveDetected,
@@ -851,7 +871,7 @@
   $('#shareResult').addEventListener('click', async () => {
     const rec = S.cur; if (!rec) return;
     const g = gradeRec(rec), a = g.all;
-    const title = [rec.res.name && rec.res.name.text, Keys.get(rec.keyIds[0]) && Keys.get(rec.keyIds[0]).name].filter(Boolean).join(' · ') || 'OMR 채점 결과';
+    const title = [!PERSONAL && rec.res.name && rec.res.name.text, Keys.get(rec.keyIds[0]) && Keys.get(rec.keyIds[0]).name].filter(Boolean).join(' · ') || 'OMR 채점 결과';
     const scoreText = a.hasKey ? (a.hasPoints ? `${a.total}/${a.max}점 (${a.right}/${a.graded} 정답)` : `${a.right}/${a.graded} 정답`) : '';
     const wrong = g.sections.flatMap(s => s.rows.filter(r => r.graded && !r.ok).map(r => r.q.no));
     const text = `${title}\n${scoreText}${wrong.length ? `\n틀린 문항: ${wrong.join(', ')}` : ''}`;
@@ -878,7 +898,30 @@
     $('#sHaptic').checked = !!st.haptics;
     $('#sLayoutsValue').textContent = `${Object.keys(Layouts.all()).length}개`;
     $('#version').textContent = `OMR 채점 ${VERSION} · 판독은 기기 안에서만 처리됩니다`;
+    const T = root.OMRT;
+    $('#sNameValue').textContent = (T.getName && T.getName()) || '없음';
+    $('#sName').closest('.set-sec').classList.toggle('hidden', !T.enabled);
+    $('#sAdmin').classList.toggle('hidden', !(T.isOwner && T.isOwner()));
   }
+  $('#sName').addEventListener('click', () => {
+    const T = root.OMRT; if (!T.setName) return;
+    const body = Sheet.open(`<h3>이름 변경</h3><p class="sub">관리자 화면에 표시되는 이름입니다.</p>
+      <input class="field" id="nmEdit" maxlength="20" value="${esc(T.getName())}">
+      <div class="btns"><button class="btn btn-primary btn-lg" id="nmOk">저장</button></div>`);
+    body.querySelector('#nmOk').addEventListener('click', async () => {
+      const v = body.querySelector('#nmEdit').value.trim();
+      const err = T.validateName(v);
+      if (err) { toast(err); return; }
+      await T.setName(v); Sheet.close(); renderSettings(); toast('이름을 바꿨습니다');
+    });
+  });
+  $('#sAdmin').addEventListener('click', () => pushView('admin'));
+  // 버전 문구를 다섯 번 누르면 관리자 화면(로그인)으로
+  let verTaps = 0, verTimer = 0;
+  $('#version').addEventListener('click', () => {
+    clearTimeout(verTimer); verTimer = setTimeout(() => { verTaps = 0; }, 1500);
+    if (++verTaps >= 5 && root.OMRT.enabled) { verTaps = 0; pushView('admin'); }
+  });
   $('#sKey').addEventListener('change', e => { Settings.set({ apiKey: e.target.value.trim() }); toast('API 키를 저장했습니다'); });
   $('#sModel').addEventListener('click', async () => {
     const st = Settings.get();
@@ -953,9 +996,10 @@
     settings: renderSettings,
     keys: () => root.KeyEditor.renderList(),
     history: () => root.HistoryView.render(),
-    result: () => { if (S.cur) navActionsResult(); }
+    result: () => { if (S.cur) navActionsResult(); },
+    admin: () => root.AdminView && root.AdminView.render()
   };
-  root.AppCore = { S, go, pushView, back, resetTo, navAction, renderResult, gradeRec, saveCurrent, renderScan, currentKey, keySummary, answersOf };
+  root.AppCore = { S, PERSONAL, go, pushView, back, resetTo, navAction, renderResult, gradeRec, saveCurrent, renderScan, currentKey, keySummary, answersOf };
 
   S.keyId = Settings.get().lastKeyId && Keys.get(Settings.get().lastKeyId) ? Settings.get().lastKeyId : '';
   Sheet.bindDrag();

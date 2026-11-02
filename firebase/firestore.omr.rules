@@ -1,0 +1,95 @@
+    // ─────────────────────────────────────────────────────────────────────────
+    // OMR 채점 (OMR-custom-optical) 이용 기록
+    //   studymeter-console 프로젝트를 함께 쓰므로, 이 블록을 프로젝트 규칙의
+    //   match /databases/{database}/documents { … } 안, 기본 거부 규칙 위에 넣어 배포한다.
+    //   isOwner() 는 같은 파일 위쪽에 정의된 함수를 그대로 쓴다.
+    //
+    //   • 일반 사용자: 익명 인증 uid 로 본인 문서만 생성·갱신. 읽기·목록·삭제 불가.
+    //     카운터는 줄일 수 없고 한 번에 늘릴 수 있는 양도 제한한다.
+    //     시각 필드는 서버 시각(request.time)만 허용해 위조를 막는다.
+    //     blocked 는 스스로 바꿀 수 없고, 차단되면 어떤 쓰기도 거부된다.
+    //   • 관리자(isOwner): 전체 읽기, blocked 토글, 삭제만 허용.
+    // ─────────────────────────────────────────────────────────────────────────
+    function omrIsSelf(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function omrNameOk(v) {
+      return v is string && v.size() >= 1 && v.size() <= 20;
+    }
+    function omrShortStr(v, n) {
+      return v is string && v.size() <= n;
+    }
+    function omrGrow(field, maxStep) {
+      return request.resource.data[field] is int
+        && request.resource.data[field] >= resource.data[field]
+        && request.resource.data[field] - resource.data[field] <= maxStep;
+    }
+    function omrUserFieldsOk(d) {
+      return d.keys().hasOnly(['name', 'device', 'appVersion', 'createdAt', 'lastSeen',
+                               'visits', 'totalSec', 'scans', 'aiReads', 'blocked'])
+        && d.keys().hasAll(['name', 'createdAt', 'lastSeen', 'visits', 'totalSec', 'scans', 'aiReads', 'blocked'])
+        && omrNameOk(d.name)
+        && (!('device' in d) || omrShortStr(d.device, 60))
+        && (!('appVersion' in d) || omrShortStr(d.appVersion, 16));
+    }
+    function omrUserActive(uid) {
+      return get(/databases/$(database)/documents/omr_users/$(uid)).data.blocked == false;
+    }
+
+    match /omr_users/{uid} {
+      allow get, list: if isOwner();
+      // 본인 문서는 존재 여부·차단 여부 확인용으로 읽을 수 있다
+      allow get: if omrIsSelf(uid);
+
+      allow create: if omrIsSelf(uid)
+        && omrUserFieldsOk(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.lastSeen == request.time
+        && request.resource.data.visits == 1
+        && request.resource.data.totalSec == 0
+        && request.resource.data.scans == 0
+        && request.resource.data.aiReads == 0
+        && request.resource.data.blocked == false;
+
+      allow update: if (omrIsSelf(uid)
+          && resource.data.blocked == false
+          && omrUserFieldsOk(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.blocked == resource.data.blocked
+          && request.resource.data.lastSeen == request.time
+          && omrGrow('visits', 1)
+          && omrGrow('totalSec', 21600)
+          && omrGrow('scans', 500)
+          && omrGrow('aiReads', 500))
+        || (isOwner()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['blocked'])
+          && request.resource.data.blocked is bool);
+
+      allow delete: if isOwner();
+
+      match /sessions/{sid} {
+        allow get, list: if isOwner();
+
+        allow create: if omrIsSelf(uid)
+          && sid.size() <= 40
+          && omrUserActive(uid)
+          && request.resource.data.keys().hasOnly(['start', 'last', 'sec', 'scans', 'aiReads', 'device'])
+          && request.resource.data.start == request.time
+          && request.resource.data.last == request.time
+          && request.resource.data.sec == 0
+          && request.resource.data.scans == 0
+          && request.resource.data.aiReads == 0
+          && omrShortStr(request.resource.data.device, 60);
+
+        allow update: if omrIsSelf(uid)
+          && omrUserActive(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last', 'sec', 'scans', 'aiReads'])
+          && request.resource.data.last == request.time
+          && omrGrow('sec', 21600)
+          && omrGrow('scans', 500)
+          && omrGrow('aiReads', 500);
+
+        allow delete: if isOwner();
+      }
+    }
+

@@ -1,12 +1,13 @@
 /* 서비스 워커 — 앱 셸 오프라인 캐시, 폰트 캐시, 공유 대상(share target) */
-const VERSION = 'omr-v2.0.0';
+const VERSION = 'omr-v2.1.0';
 const ASSETS = [
   './', 'index.html', 'css/app.css',
   'js/omr-engine.js', 'js/worker.js', 'js/store.js', 'js/grading.js', 'js/gemini.js',
-  'js/ui.js', 'js/camera.js', 'js/keys.js', 'js/history.js', 'js/app.js',
+  'js/ui.js', 'js/camera.js', 'js/keys.js', 'js/history.js', 'js/app.js', 'js/admin.js', 'js/telemetry.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'
 ];
-const FONT_HOSTS = ['cdn.jsdelivr.net'];
+// 글꼴·Firebase SDK: 버전 고정 URL이라 캐시 우선 (오프라인에서도 앱이 뜨도록)
+const FONT_HOSTS = ['cdn.jsdelivr.net', 'www.gstatic.com'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

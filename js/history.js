@@ -19,8 +19,10 @@
   function row(d) {
     const s = d.summary || {};
     const big = s.hasKey ? (s.hasPoints ? `${s.total}<small>점</small>` : `${s.right}<small>/${s.graded}</small>`) : '<small>정답 없음</small>';
-    const title = d.name || d.keyName || d.profileLabel || '답안지';
-    const sub = [fmtDate(d.date), d.name ? d.keyName : '', d.examNo].filter(Boolean).join(' · ');
+    const personal = root.AppCore && root.AppCore.PERSONAL;
+    const title = personal ? (d.keyName || d.profileLabel || '답안지') : (d.name || d.keyName || d.profileLabel || '답안지');
+    const sub = personal ? [fmtDate(d.date), d.keyName ? d.profileLabel : ''].filter(Boolean).join(' · ')
+      : [fmtDate(d.date), d.name ? d.keyName : '', d.examNo].filter(Boolean).join(' · ');
     return `<button class="row row-tap" data-h="${esc(d.id)}"><span class="row-main"><span class="t">${esc(title)}</span><span class="row-sub">${esc(sub)}</span></span><span class="big-num">${big}</span><svg class="chev"><use href="#i-chev"/></svg></button>`;
   }
 
