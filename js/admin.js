@@ -124,7 +124,7 @@
     if (wide()) { renderList(); host = $('#admDetail'); host.innerHTML = '<p class="footnote center" style="margin-top:40px">불러오는 중…</p>'; }
     else host = Sheet.open('<p class="footnote center">불러오는 중…</p>');
     let sessions = [];
-    try { sessions = await root.OMRT.admin.listSessions(id, 200); } catch (e) { toast('접속 기록을 불러오지 못했습니다'); }
+    try { sessions = await root.OMRT.admin.listSessions(id, 60); } catch (e) { toast('접속 기록을 불러오지 못했습니다'); }
     if (A.sel !== id) return;
     host.innerHTML = detailHtml(u, sessions);
     host.querySelector('#admBlock').addEventListener('click', () => toggleBlock(u));
@@ -139,8 +139,16 @@
     const bars = keys.map(k => `<i class="${sum[k] ? '' : 'zero'}" style="height:${sum[k] ? Math.max(6, Math.round(sum[k] / max * 100)) : 4}%" title="${dur(sum[k])}"></i>`).join('');
     return `<div class="group"><div class="adm-days">${bars}</div><div class="adm-days-lab"><span>14일 전</span><span>사용 시간 · 최대 ${dur(max)}</span><span>오늘</span></div></div>`;
   }
+  function scoreText(r) { return r.p ? `${r.s}<small>/${r.m}점</small>` : `${r.s}<small>/${r.m} 정답</small>`; }
+  function resultsHtml(sessions) {
+    const all = sessions.flatMap(s => s.results).sort((a, b) => b.t - a.t).slice(0, 30);
+    if (!all.length) return '<p class="footnote">아직 정답을 고르고 채점한 기록이 없습니다</p>';
+    return `<div class="group">${all.map(r => `<div class="row"><span class="row-main"><span class="t">${esc(r.k || '정답 없음')}</span>
+      <span class="row-sub num">${esc(dt(r.t, true))}</span></span>
+      ${r.g ? `<span class="adm-grade">${r.g}등급</span>` : ''}<span class="big-num">${scoreText(r)}</span></div>`).join('')}</div>`;
+  }
   function detailHtml(u, sessions) {
-    const rows = sessions.slice(0, 60).map(s => `<div class="row"><span class="row-main"><span class="t num">${esc(dt(s.start, true))}</span>
+    const rows = sessions.map(s => `<div class="row"><span class="row-main"><span class="t num">${esc(dt(s.start, true))}</span>
       <span class="row-sub">${esc(s.device)}</span></span><span class="row-value small">${dur(s.sec)}${s.scans ? ` · 스캔 ${s.scans}` : ''}${s.aiReads ? ` · AI ${s.aiReads}` : ''}</span></div>`).join('');
     return `
       <h3 style="margin:${wide() ? '10px' : '8px'} 4px 2px">${esc(u.name || '(이름 없음)')}${u.blocked ? '<span class="adm-badge">차단</span>' : ''}</h3>
@@ -155,9 +163,11 @@
         <div class="row"><span class="row-label">최근 접속</span><span class="row-value num">${esc(dt(u.lastSeen, true))} (${esc(ago(u.lastSeen))})</span></div>
         <div class="row"><span class="row-label">사용자 ID</span><span class="row-value small mono">${esc(u.id.slice(0, 10))}…</span></div>
       </div>
+      <h2 class="section-title">최근 채점</h2>
+      ${resultsHtml(sessions)}
       <h2 class="section-title">최근 14일</h2>
       ${daysChart(sessions)}
-      <h2 class="section-title">접속 기록 ${sessions.length ? `(${sessions.length >= 200 ? '최근 200' : sessions.length}회)` : ''}</h2>
+      <h2 class="section-title">접속 기록 ${sessions.length ? `(${sessions.length >= 60 ? '최근 60' : sessions.length}회)` : ''}</h2>
       ${rows ? `<div class="group">${rows}</div>` : '<p class="footnote">접속 기록이 없습니다</p>'}
       <div class="row-actions" style="margin:16px 0 8px">
         <button class="btn btn-plain btn-sm" id="admBlock">${u.blocked ? '차단 해제' : '이용 차단'}</button>

@@ -83,7 +83,10 @@
 
         allow update: if omrIsSelf(uid)
           && omrUserActive(uid)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last', 'sec', 'scans', 'aiReads'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last', 'sec', 'scans', 'aiReads', 'results'])
+          // 채점 요약(시험 이름·점수·등급)은 길이 제한이 있는 JSON 문자열 하나로만 받는다
+          && (!('results' in request.resource.data)
+              || (request.resource.data.results is string && request.resource.data.results.size() <= 2000))
           && request.resource.data.last == request.time
           && omrGrow('sec', 21600)
           && omrGrow('scans', 500)

@@ -618,6 +618,13 @@
       thumb: rec.thumbDirty === false ? rec.thumb : thumbOf(rec)
     };
     rec.thumb = data.thumb;
+    // 관리자용 채점 요약 (시험 이름·점수·등급만). 별도 전송 없이 다음 접속 기록 저장 때 함께 실린다.
+    const a = g.all;
+    if (a.hasKey) root.OMRT.result && root.OMRT.result({
+      id: rec.id, k: (data.keyName || data.profileLabel || '').slice(0, 30),
+      s: a.hasPoints ? a.total : a.right, m: a.hasPoints ? a.max : a.graded, p: a.hasPoints ? 1 : 0,
+      g: (a.hasPoints && k0 && G.gradeLevel(a.total, k0.cutoffs)) || 0
+    });
     try { await History.put(data); } catch (e) { toast('저장 실패: ' + e.message); }
   }
   async function openHistory(id) {

@@ -12,7 +12,10 @@
  */
 const SDK = 'https://www.gstatic.com/firebasejs/12.16.0/';
 const NAME_KEY = 'omr_user_name';
-const FLUSH_MS = 120 * 1000;          // 접속 중 2분마다 사용 시간 저장
+// 비용 절약: 접속 중에는 5분에 한 번, 화면을 벗어날 때 한 번만 저장한다 (한 번 = 문서 2개를 묶은 batch)
+const FLUSH_MS = 5 * 60 * 1000;
+const MAX_RESULTS = 20;                // 접속 1회에 남기는 채점 요약 수
+const RESULTS_MAX_CHARS = 2000;        // firestore.rules 의 상한과 같아야 한다
 const NEW_SESSION_GAP = 30 * 60 * 1000; // 30분 넘게 자리를 비우면 새 접속으로 센다
 const APP_VERSION = '2.1.0';
 
@@ -104,7 +107,7 @@ async function signIn() {
 }
 
 // ------------------------------------------------------------ 접속 기록
-const sess = { id: '', visibleSince: 0, sec: 0, scans: 0, aiReads: 0, flushed: { sec: 0, scans: 0, aiReads: 0 }, hiddenAt: 0 };
+const sess = { id: '', visibleSince: 0, sec: 0, scans: 0, aiReads: 0, flushed: { sec: 0, scans: 0, aiReads: 0 }, hiddenAt: 0, results: [], resultsDirty: false };
 let userRef = null, sessRef = null, timer = 0, starting = false, started = false;
 
 function newSessionId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -130,6 +133,8 @@ async function openSession(countVisit) {
   }
   sess.id = newSessionId();
   sess.sec = 0; sess.scans = 0; sess.aiReads = 0; sess.flushed = { sec: 0, scans: 0, aiReads: 0 };
+  // 직전 접속에서 아직 못 보낸 채점 요약은 새 접속으로 넘긴다
+  if (!sess.resultsDirty) sess.results = [];
   sess.visibleSince = document.visibilityState === 'visible' ? Date.now() : 0;
   sessRef = doc(db, 'omr_users', uid, 'sessions', sess.id);
   await setDoc(sessRef, { start: serverTimestamp(), last: serverTimestamp(), sec: 0, scans: 0, aiReads: 0, device });
@@ -140,12 +145,14 @@ async function flush() {
   if (!sessRef || blocked) return;
   const sec = liveSec();
   const d = { sec: sec - sess.flushed.sec, scans: sess.scans - sess.flushed.scans, aiReads: sess.aiReads - sess.flushed.aiReads };
-  if (!d.sec && !d.scans && !d.aiReads) return;
+  if (!d.sec && !d.scans && !d.aiReads && !sess.resultsDirty) return;
   const snapshot = { sec, scans: sess.scans, aiReads: sess.aiReads };
   sess.flushed = snapshot;
+  const extra = {};
+  if (sess.resultsDirty) { extra.results = packResults(); sess.resultsDirty = false; }
   const { writeBatch, serverTimestamp, increment } = fb;
   const b = writeBatch(db);
-  b.update(sessRef, { last: serverTimestamp(), ...snapshot });
+  b.update(sessRef, { last: serverTimestamp(), ...snapshot, ...extra });
   b.update(userRef, { lastSeen: serverTimestamp(), totalSec: increment(d.sec), scans: increment(d.scans), aiReads: increment(d.aiReads) });
   try { await b.commit(); }
   catch (e) {
@@ -175,6 +182,21 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 window.addEventListener('pagehide', () => { if (started) flush(); });
+
+// 채점 요약: 같은 답안지를 고치면 덮어쓰고, 접속 1회당 최근 MAX_RESULTS 건만 짧은 문자열로 보낸다
+function result(r) {
+  const item = [String(r.k || '').slice(0, 30), r.s | 0, r.m | 0, r.p ? 1 : 0, r.g | 0, Date.now()];
+  const i = sess.results.findIndex(x => x.id === r.id);
+  if (i >= 0) sess.results[i].v = item; else sess.results.push({ id: r.id, v: item });
+  if (sess.results.length > MAX_RESULTS) sess.results.splice(0, sess.results.length - MAX_RESULTS);
+  sess.resultsDirty = true;
+}
+function packResults() {
+  const list = sess.results.map(x => x.v);
+  let out = JSON.stringify(list);
+  while (out.length > RESULTS_MAX_CHARS && list.length) { list.shift(); out = JSON.stringify(list); }
+  return out;
+}
 
 function track(ev) {
   if (ev === 'scan') sess.scans++;
@@ -233,7 +255,12 @@ async function listSessions(id, n) {
   const a = await admin();
   const { collection, getDocs, query, orderBy, limit } = fb;
   const snap = await getDocs(query(collection(a.db, 'omr_users', id, 'sessions'), orderBy('start', 'desc'), limit(n || 200)));
-  return snap.docs.map(d => { const x = d.data(); return { id: d.id, start: ms(x.start), last: ms(x.last), sec: x.sec || 0, scans: x.scans || 0, aiReads: x.aiReads || 0, device: x.device || '' }; });
+  return snap.docs.map(d => {
+    const x = d.data();
+    let results = [];
+    try { const r = JSON.parse(x.results || '[]'); if (Array.isArray(r)) results = r.filter(Array.isArray).map(v => ({ k: String(v[0] || ''), s: +v[1] || 0, m: +v[2] || 0, p: !!v[3], g: +v[4] || 0, t: +v[5] || 0 })); } catch (e) { /* 손상된 값은 무시 */ }
+    return { id: d.id, start: ms(x.start), last: ms(x.last), sec: x.sec || 0, scans: x.scans || 0, aiReads: x.aiReads || 0, device: x.device || '', results };
+  });
 }
 async function setBlocked(id, b) { const a = await admin(); await fb.updateDoc(fb.doc(a.db, 'omr_users', id), { blocked: !!b }); }
 async function deleteUser(id) {
@@ -255,7 +282,7 @@ async function deleteUser(id) {
   try { cfg = (await import('./firebase-config.js')).default; } catch (e) { cfg = null; }
   if (!cfg || !cfg.projectId || !cfg.ownerUid) return; // 설정 없음 → 이용 기록 끔
   Object.assign(T, {
-    enabled: true, track, getName, validateName, setName, isOwner,
+    enabled: true, track, result, getName, validateName, setName, isOwner,
     admin: { ready: admin, signIn: adminSignIn, signOut: adminSignOut, listUsers, listSessions, setBlocked, deleteUser }
   });
   queued.forEach(track);
