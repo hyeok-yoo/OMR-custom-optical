@@ -1,7 +1,7 @@
 /* OMR 채점 — 앱 셸, 판독 흐름, 결과 화면, 설정 */
 (function (root) {
   'use strict';
-  const VERSION = '2.1.1';
+  const VERSION = '2.1.2';
   const { $, $$, toast, haptic, Sheet, choose, confirmSheet, esc, fmtDate, CIRCLED, countUp } = root.UI;
   const { Settings, Keys, Layouts, History, Sessions, uid } = root.Store;
   const E = root.OMREngine, G = root.Grading;
@@ -399,7 +399,7 @@
     const sn = $('#scoreNum');
     if (first) countUp(sn, big, 800); else sn.textContent = big;
     $('#scoreOf').textContent = of;
-    $('#scoreSub').innerHTML = sub.join('');
+    $('#scoreSub').innerHTML = sub.map(s => `<span>${s}</span>`).join('');
     renderBanners(rec, g);
     renderElective(rec);
     renderSectionKeys(rec);

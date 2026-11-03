@@ -17,7 +17,7 @@ const FLUSH_MS = 5 * 60 * 1000;
 const MAX_RESULTS = 20;                // 접속 1회에 남기는 채점 요약 수
 const RESULTS_MAX_CHARS = 2000;        // firestore.rules 의 상한과 같아야 한다
 const NEW_SESSION_GAP = 30 * 60 * 1000; // 30분 넘게 자리를 비우면 새 접속으로 센다
-const APP_VERSION = '2.1.1';
+const APP_VERSION = '2.1.2';
 
 const T = window.OMRT;
 const queued = T.q.splice(0);

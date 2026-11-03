@@ -47,7 +47,7 @@
     const byKey = new Map();
     all.forEach(d => { const id = d.keyIds && d.keyIds[0]; if (id) { if (!byKey.has(id)) byKey.set(id, []); byKey.get(id).push(d); } });
     if (!byKey.size) { $('#hist-stats').innerHTML = empty('i-history', '통계가 없습니다', '정답을 선택해 채점한 기록이 쌓이면 문항별 오답률과 점수 추이를 보여줍니다.'); return; }
-    if (!statKey || !byKey.has(statKey)) statKey = Array.from(byKey.keys())[0];
+    if (!statKey || !byKey.has(statKey)) statKey = Array.from(byKey.keys()).sort((a, b) => byKey.get(b).length - byKey.get(a).length)[0];
     const key = Keys.get(statKey);
     const recs = byKey.get(statKey).slice().sort((a, b) => a.date - b.date);
     const graded = recs.map(d => ({ d, graded: regrade(d) }));
