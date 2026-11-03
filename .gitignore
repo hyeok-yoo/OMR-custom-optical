@@ -2,3 +2,4 @@ node_modules/
 .DS_Store
 *.raw
 js/firebase-config.js
+.claude/

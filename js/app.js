@@ -1,7 +1,7 @@
 /* OMR 채점 — 앱 셸, 판독 흐름, 결과 화면, 설정 */
 (function (root) {
   'use strict';
-  const VERSION = '2.1.0';
+  const VERSION = '2.1.1';
   const { $, $$, toast, haptic, Sheet, choose, confirmSheet, esc, fmtDate, CIRCLED, countUp } = root.UI;
   const { Settings, Keys, Layouts, History, Sessions, uid } = root.Store;
   const E = root.OMREngine, G = root.Grading;
@@ -301,6 +301,7 @@
   }
   $('#failManual').addEventListener('click', () => openManual());
   $('#toManual').addEventListener('click', () => openManual());
+  $('#doneResult').addEventListener('click', () => back());
   $('#failAI').addEventListener('click', () => aiDirectRead());
 
   // ================================================================ 결과
@@ -405,7 +406,6 @@
     renderItems(rec, g);
     drawOverlay(rec, g);
     $('#toManual').classList.toggle('hidden', !S.src || !!r.ai);
-    $('#nextScanBtn').classList.toggle('hidden', false);
     navActionsResult();
   }
   function navActionsResult() {
@@ -992,7 +992,7 @@
     if (await confirmSheet('학습한 양식', `문항 번호를 기억한 양식 ${n}개가 있습니다. 모두 지우면 다음 스캔부터 다시 자동 추정합니다.`, '모두 지우기', true)) { Layouts.replaceAll({}); renderSettings(); }
   });
   $('#sClear').addEventListener('click', async () => {
-    if (!(await confirmSheet('모두 삭제', '모든 정답과 채점 기록, 반 채점 세션을 지웁니다. 되돌릴 수 없습니다.', '삭제', true))) return;
+    if (!(await confirmSheet('모두 삭제', PERSONAL ? '모든 정답과 채점 기록을 지웁니다. 되돌릴 수 없습니다.' : '모든 정답과 채점 기록, 반 채점 세션을 지웁니다. 되돌릴 수 없습니다.', '삭제', true))) return;
     Keys.replaceAll([]); await History.clear(); await Sessions.clear();
     S.session = null; toast('삭제했습니다');
   });

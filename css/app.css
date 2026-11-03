@@ -451,6 +451,7 @@ main { max-width: 760px; margin: 0 auto; padding: 4px 16px calc(var(--tab-h) + v
 
 /* 제품 구분: 개인용에서는 학원용 기능을 숨긴다 */
 html[data-edition="personal"] .academy-only { display: none !important; }
+html:not([data-edition="personal"]) .personal-only { display: none !important; }
 
 /* 넓은 화면 전용: 사이드바 브랜드 */
 .side-brand { display: none; }
@@ -459,14 +460,15 @@ html[data-edition="personal"] .academy-only { display: none !important; }
    반응형 — 태블릿(세로) 600px+, 태블릿(가로)·데스크톱 1024px+
    ===================================================================== */
 @media (min-width: 600px) {
-  :root { --tab-h: 68px; }
   main { max-width: 820px; padding-left: 24px; padding-right: 24px; }
   .nav-bar { max-width: 820px; padding: 0 16px; }
   .large-title { margin-top: 18px; font-size: 38px; }
   .items { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
   .item { height: 70px; }
-  .tabbar { width: min(520px, calc(100% - 48px)); border-radius: 28px; }
-  .tabbar button { flex-direction: row; gap: 8px; font-size: 14px; border-radius: 22px; }
+  :root { --tab-h: 76px; }
+  .tabbar { width: min(600px, calc(100% - 48px)); border-radius: 30px; }
+  .tabbar button { flex-direction: row; gap: 9px; font-size: 16px; font-weight: 620; border-radius: 24px; }
+  .tabbar button svg { width: 26px; height: 26px; }
   .cta { grid-template-columns: 1.6fr 1fr; }
   .cta .btn-lg { min-height: 64px; border-radius: 18px; }
   .stat-hero b { font-size: 30px; }
@@ -489,19 +491,20 @@ html[data-edition="personal"] .academy-only { display: none !important; }
 }
 
 @media (min-width: 1024px) {
-  :root { --side-w: 92px; }
-  /* 탭바 → 왼쪽 사이드 레일 */
+  :root { --side-w: 236px; }
+  /* 탭바 → 왼쪽 사이드바 (태블릿 가로부터 라벨까지 크게) */
   .tabbar {
     left: calc(env(safe-area-inset-left, 0px) + 12px); top: calc(var(--safe-t) + 12px); bottom: calc(var(--safe-b) + 12px);
-    transform: none; width: calc(var(--side-w) - 18px); height: auto;
-    flex-direction: column; justify-content: flex-start; gap: 4px; padding: 10px 7px; border-radius: 26px;
+    transform: none; width: calc(var(--side-w) - 20px); height: auto;
+    flex-direction: column; justify-content: flex-start; gap: 6px; padding: 16px 12px; border-radius: 28px;
   }
-  .tabbar button { flex: none; flex-direction: column; gap: 4px; height: 66px; font-size: 11.5px; border-radius: 18px; }
-  .tabbar button:active { transform: scale(.96); }
+  .tabbar button { flex: none; flex-direction: row; justify-content: flex-start; gap: 14px; height: 58px; padding: 0 16px; font-size: 17px; font-weight: 640; border-radius: 18px; }
+  .tabbar button svg { width: 27px; height: 27px; }
+  .tabbar button:active { transform: scale(.97); }
   .app.hide-tabs .tabbar { transform: none; }
-  .side-brand { display: grid; place-items: center; padding: 6px 0 14px; }
+  .side-brand { display: flex; align-items: center; gap: 12px; padding: 4px 8px 22px; }
   .side-brand img { width: 40px; height: 40px; border-radius: 11px; }
-  .side-brand span { display: none; }
+  .side-brand span { display: inline; font-weight: 740; font-size: 19px; letter-spacing: -0.02em; }
   .nav, main { margin-left: var(--side-w); }
   main { max-width: none; padding: 4px 32px calc(var(--safe-b) + 40px); }
   .nav-bar { max-width: none; padding: 0 24px; }
@@ -539,18 +542,15 @@ html[data-edition="personal"] .academy-only { display: none !important; }
 }
 
 @media (min-width: 1280px) {
-  :root { --side-w: 244px; }
-  .tabbar { padding: 14px 10px; }
-  .tabbar button { flex-direction: row; justify-content: flex-start; height: 48px; gap: 12px; padding: 0 14px; font-size: 15.5px; border-radius: 14px; }
-  .side-brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; }
-  .side-brand img { width: 34px; height: 34px; border-radius: 9px; }
-  .side-brand span { display: inline; font-weight: 720; font-size: 17px; letter-spacing: -0.02em; }
+  :root { --side-w: 264px; }
+  .tabbar button { height: 60px; font-size: 18px; }
+  .side-brand span { font-size: 20px; }
   .scan-layout { grid-template-columns: minmax(380px, 480px) minmax(0, 1fr); gap: 40px; }
 }
 
-/* 채점 홈 안내 (넓은 화면에서 최근 기록이 없을 때) */
+/* 채점 홈 안내 (태블릿 이상에서 최근 기록이 없을 때) */
 .scan-guide { display: none; }
-@media (min-width: 1024px) {
+@media (min-width: 600px) {
   .scan-guide { display: block; margin-top: 10px; padding: 22px 24px 10px; border-radius: var(--radius-lg); background: radial-gradient(140% 120% at 100% 0%, rgb(var(--accent) / .12), transparent 55%), var(--elev); }
   .scan-guide.hidden { display: none; }
   .scan-guide h2 { margin: 0 0 14px; font-size: 20px; letter-spacing: -0.02em; }

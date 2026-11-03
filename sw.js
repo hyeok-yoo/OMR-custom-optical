@@ -1,5 +1,5 @@
 /* 서비스 워커 — 앱 셸 오프라인 캐시, 폰트 캐시, 공유 대상(share target) */
-const VERSION = 'omr-v2.1.0';
+const VERSION = 'omr-v2.1.1';
 const ASSETS = [
   './', 'index.html', 'css/app.css',
   'js/omr-engine.js', 'js/worker.js', 'js/store.js', 'js/grading.js', 'js/gemini.js',
